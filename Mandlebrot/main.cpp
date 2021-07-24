@@ -105,7 +105,7 @@ int main()
 
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
 	glEnableVertexAttribArray(0);
-
+	
 	cameraLoc = glm::vec3(0.0f, 0.0f, -1.0f);
 	proj = glm::ortho(sides.x, sides.y, sides.z, sides.w);
 	view = glm::translate(glm::mat4(1.0f), cameraLoc);

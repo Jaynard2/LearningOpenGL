@@ -29,13 +29,13 @@ const float randStrength = 0.99f;
 const float lookAngle = PI / 4;
 const int	lookSize = 3;
 const float lookOffset = 4.0f;      //Distance from slime to check for trail
-ivec2 size = imageSize(tex);
+const ivec2 size = imageSize(tex);
 
-float pickDirection(Slime sl);
-float calcValue(Slime sl, float angle);
-void drawCircle(Slime sl, float radius);
+float pickDirection(const Slime sl);
+float calcValue(const Slime sl, const float angle);
+void drawCircle(const Slime sl, const float radius);
 void fadeOld();
-float random (vec2 st);
+float random (const vec2 st);
 
 void main()
 {
@@ -57,7 +57,7 @@ void main()
 	slimes[index].pos.y = int(slimes[index].pos.y >= 0) * slimes[index].pos.y + int(slimes[index].pos.y < 0) * size.y;
 }
 
-float pickDirection(Slime sl)
+float pickDirection(const Slime sl)
 {
 	
 	float left = calcValue(sl, -lookAngle);
@@ -77,7 +77,7 @@ float pickDirection(Slime sl)
 
 
 }
-float calcValue(Slime sl, float angle)
+float calcValue(const Slime sl, const float angle)
 {
 	vec2 center = vec2(cos(sl.angle + angle), sin(sl.angle + angle)) * lookOffset + sl.pos;
 
@@ -97,7 +97,7 @@ float calcValue(Slime sl, float angle)
 }
 
 
-void drawCircle(Slime sl, float radius)
+void drawCircle(const Slime sl, const float radius)
 {
 	for(float x = sl.pos.x - radius; x < sl.pos.x + radius; x++)
 	{
@@ -119,7 +119,7 @@ void drawCircle(Slime sl, float radius)
 	}
 }
 
-float random (vec2 st) 
+float random (const vec2 st) 
 {
     return fract(sin(dot(st, vec2(12.9898,78.233))) * 43758.5453123);
 }

@@ -5,10 +5,19 @@
 #include <glm/common.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <time.h>
+#include <vector>
 
 #include "GLRenderingProgram.h"
+#include "OpenGLFailure.h"
 
 #define PI 3.14159
+
+//Disable debug console for release
+#ifdef _DEBUG
+#define MAIN main()
+#else
+#define MAIN WinMain(HINSTANCE hIstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
+#endif
 
 enum class SPECIES { ONE = 1, TWO, ALL };
 
@@ -16,6 +25,7 @@ unsigned constexpr WIDTH = 1920;
 unsigned constexpr HEIGHT = 1080;
 unsigned constexpr SLIME_AMOUNT = 100000;
 SPECIES constexpr SPECIES_NUM = SPECIES::ALL;
+unsigned constexpr SIM_CALLS = SLIME_AMOUNT / 1000;
 
 extern "C"
 {
@@ -29,7 +39,7 @@ struct Slime
 	unsigned int colorMask;
 };
 
-int main()
+int MAIN
 {
 	if (!glfwInit())
 	{
@@ -62,9 +72,28 @@ int main()
 
 	glfwSwapInterval(1);
 
-	GLRenderingProgram prog = GLRenderingProgram("vert.glsl", "frag.glsl");
-	GLRenderingProgram slimeProg = GLRenderingProgram("slimeCompute.glsl");
-	GLRenderingProgram fadeProg = GLRenderingProgram("fadeComp.glsl");
+	GLRenderingProgram* prog;
+	GLRenderingProgram* slimeProg;
+	GLRenderingProgram* fadeProg;
+	GLRenderingProgram* sortProg;
+
+	try
+	{
+		prog      = new GLRenderingProgram("vert.glsl", "frag.glsl");
+		slimeProg = new GLRenderingProgram("slimeCompute.glsl");
+		fadeProg  = new GLRenderingProgram("fadeComp.glsl");
+		sortProg  = new GLRenderingProgram("SorterComp.glsl");
+	}
+	catch (const OpenGLFailure& er)
+	{
+		std::cerr << er.what() << std::endl;
+
+#ifdef _DEBUG
+		std::cin.ignore();
+#endif
+
+		return -1;
+	}
 
 	float positions[] = {
 		0.0f, HEIGHT,
@@ -117,8 +146,8 @@ int main()
 
 	for (unsigned i = 0; i < SLIME_AMOUNT; i++)
 	{
-		slimes[i].pos = glm::vec2(rand() % WIDTH, rand() % HEIGHT);
-		slimes[i].angle = (rand() % 360) * (PI / 180.0f);
+		slimes[i].pos = glm::vec2(HEIGHT / 4.0f * cos(i * 2 * PI / SLIME_AMOUNT) + WIDTH / 2.0f, HEIGHT / 4.0f * sin(i * 2 * PI / SLIME_AMOUNT) + HEIGHT / 2.0f);
+		slimes[i].angle = tan(slimes[i].pos.y / slimes[i].pos.x);
 		slimes[i].colorMask = rand() % (int)SPECIES_NUM ;
 	}
 
@@ -129,7 +158,12 @@ int main()
 	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Slime) * SLIME_AMOUNT, slimes, GL_DYNAMIC_COPY);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo[0]);
 
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo[1]);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Slime) * SLIME_AMOUNT, nullptr, GL_DYNAMIC_COPY);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssbo[1]);
+
 	float frameTime = 0.0f;
+	uint32_t sorted = false;
 	
 	while (!glfwWindowShouldClose(window))
 	{
@@ -137,24 +171,28 @@ int main()
 
 		//Run Compute Shaders
 		//Fade shader
-		fadeProg.use();
+		fadeProg->use();
 		glDispatchCompute(WIDTH / 30, HEIGHT / 30, 1);
-		glMemoryBarrier(GL_ALL_BARRIER_BITS);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
 		//Slime sim
-		slimeProg.use();
-		glUniform1f(slimeProg.getUniformLoc("time"), frameTime);
+		slimeProg->use();
+		glUniform1f(slimeProg->getUniformLoc("time"), frameTime);
+		glDispatchCompute(SIM_CALLS, 1, 1);
 
-		glDispatchCompute(SLIME_AMOUNT / 1000, 1, 1);
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-		glMemoryBarrier(GL_ALL_BARRIER_BITS);
+		//Sorter
+		//sortProg.use();
+		//glDispatchCompute(SIM_CALLS, 1, 1);
+
 		//Run Render Shader
-		prog.use();
+		prog->use();
 
 		glClear(GL_COLOR_BUFFER_BIT);
 		glClear(GL_DEPTH_BUFFER_BIT);
 
-		glUniformMatrix4fv(prog.getUniformLoc("matrix"), 1, GL_FALSE, glm::value_ptr(matrix));
+		glUniformMatrix4fv(prog->getUniformLoc("matrix"), 1, GL_FALSE, glm::value_ptr(matrix));
 
 		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
 		glEnableVertexAttribArray(0);
@@ -171,6 +209,11 @@ int main()
 	}
 
 	delete[] slimes;
+
+	delete prog;
+	delete slimeProg;
+	delete fadeProg;
+	delete sortProg;
 
 	return 0;
 }
